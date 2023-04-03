@@ -1024,6 +1024,14 @@ main(int argc, char *argv[])
     if (params.subfiling)
         subfiling = 1;
 
+    if(params.coll_buff_size > 0) {
+        MPI_Info_create(&info);
+		char cbstring[20];
+		sprintf(cbstring, "%d", params.coll_buff_size*1024);
+		MPI_Info_set(info, "cb_buffer_size", cbstring);
+		MPI_Info_set(info, "romio_cb_write", "enable");
+    }
+
 #if H5_VERSION_GE(1, 13, 0)
     if (H5VLis_connector_registered_by_name("async")) {
         if (MY_RANK == 0) {
@@ -1200,6 +1208,8 @@ main(int argc, char *argv[])
             fclose(params.csv_fs);
         }
     }
+
+    if(params.coll_buff_size > 0) MPI_Info_free(&info);
 
     MPI_Finalize();
     return 0;

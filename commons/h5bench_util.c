@@ -715,6 +715,12 @@ _set_params(char *key, char *val_in, bench_params *params_in_out, int do_write)
         else
             (*params_in_out).data_coll = 0;
     }
+    else if (strcmp(key, "COLLECTIVE_BUFFER_SIZE") == 0) {
+        unsigned long long num = 0;
+        if (str_to_ull(val, &num) < 0)
+            return -1;
+        (*params_in_out).coll_buff_size = num;
+    }
     else if (strcmp(key, "COMPRESS") == 0) {
         if (val[0] == 'Y' || val[0] == 'y')
             (*params_in_out).useCompress = 1;
@@ -1122,6 +1128,7 @@ print_params(const bench_params *p)
     printf("Mode: %s\n", p->asyncMode == MODE_SYNC ? "SYNC" : "ASYNC");
     printf("Collective metadata operations: %s\n", p->meta_coll == 1 ? "YES" : "NO");
     printf("Collective buffering for data operations: %s\n", p->data_coll == 1 ? "YES" : "NO");
+    printf("Collective buffer size: %llu\n", p->coll_buff_size);
     if (p->subfiling) {
         printf("Use Subfiling: %s\n", p->subfiling == 1 ? "YES" : "NO");
     }

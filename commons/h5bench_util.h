@@ -106,6 +106,7 @@ typedef struct bench_params {
     char *             pattern_name;
     int                meta_coll; // for write only, metadata collective
     int                data_coll; // data collective
+    unsigned long long coll_buff_size;
     int                cnt_time_step;
     int                cnt_time_step_delay;
     unsigned long long num_particles;     // total number per rank

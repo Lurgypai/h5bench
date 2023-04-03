@@ -364,7 +364,7 @@ _run_benchmark_read(hid_t file_id, hid_t fapl, hid_t gapl, hid_t filespace, benc
 }
 
 void
-set_pl(hid_t *fapl, hid_t *gapl)
+set_pl(hid_t *fapl, hid_t *gapl, MPI_Info* info)
 {
     *fapl = H5Pcreate(H5P_FILE_ACCESS);
     *gapl = H5Pcreate(H5P_GROUP_ACCESS);
@@ -373,7 +373,7 @@ set_pl(hid_t *fapl, hid_t *gapl)
         H5Pset_fapl_subfiling(*fapl, NULL);
     else
 #endif
-        H5Pset_fapl_mpio(*fapl, MPI_COMM_WORLD, MPI_INFO_NULL);
+        H5Pset_fapl_mpio(*fapl, MPI_COMM_WORLD, *info);
 
 #if H5_VERSION_GE(1, 10, 0)
     H5Pset_all_coll_metadata_ops(*fapl, true);
@@ -431,8 +431,18 @@ main(int argc, char *argv[])
     if (params.subfiling)
         subfiling = 1;
 
+
+    MPI_Info info = MPI_INFO_NULL;
+    if(params.coll_buff_size > 0) {
+        MPI_Info_create(&info);
+		char cbstring[20];
+		sprintf(cbstring, "%d", params.coll_buff_size*1024);
+		MPI_Info_set(info, "cb_buffer_size", cbstring);
+		MPI_Info_set(info, "romio_cb_read", "enable");
+    }
+
     hid_t fapl, gapl;
-    set_pl(&fapl, &gapl);
+    set_pl(&fapl, &gapl, &info);
 
     hsize_t dims[64] = {0};
 
@@ -489,7 +499,6 @@ main(int argc, char *argv[])
         return 0;
     }
 
-    MPI_Info info = MPI_INFO_NULL;
     if (MY_RANK == 0) {
         printf("Total particles in the file: %lu\n", total_particles);
         printf("Number of particles available per rank: %llu \n", NUM_PARTICLES);
@@ -608,6 +617,7 @@ error:
 
 done:
     H5close();
+    if(params.coll_buff_size > 0) MPI_Info_free(&info);
     MPI_Finalize();
     return 0;
 }
