@@ -422,3 +422,9 @@ endif()
 # Testing #####################################################################
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+# Encryption
+
+if(H5BENCH_ENCRYPTION)
+    add_subdirectory("./encryption_wrapper")
+endif()
