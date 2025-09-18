@@ -1066,6 +1066,43 @@ main(int argc, char *argv[])
     ALIGN_THRESHOLD = params.align_threshold;
     ALIGN_LEN       = params.align_len;
 
+    if(params.useEncryption) {
+        printf("Rank %d is setting up encryption.", MY_RANK);
+
+        H5FD_pb_vfd_config_t     pb_vfd_config =
+        {
+            /* magic          = */ H5FD_PB_CONFIG_MAGIC,
+            /* version        = */ H5FD_CURR_PB_VFD_CONFIG_VERSION,
+            /* page_size      = */ H5FD_PB_DEFAULT_PAGE_SIZE,
+            /* max_num_pages  = */ H5FD_PB_DEFAULT_MAX_NUM_PAGES,
+            /* rp             = */ H5FD_PB_DEFAULT_REPLACEMENT_POLICY,
+            /* fapl_id        = */ H5P_DEFAULT  /* will overwrite */
+        };
+        H5FD_crypt_vfd_config_t  crypt_vfd_config =
+        {
+            /* magic                  = */ H5FD_CRYPT_CONFIG_MAGIC,
+            /* version                = */ H5FD_CURR_CRYPT_VFD_CONFIG_VERSION,
+            /* plaintext_page_size    = */ 4096,
+            /* ciphertext_page_size   = */ 4112,
+            /* encryption_buffer_size = */ H5FD_CRYPT_DEFAULT_ENCRYPTION_BUFFER_SIZE,
+            /* cipher                 = */ 0,   /* AES256 */
+            /* cipher_block_size      = */ 16,
+            /* key_size               = */ 32,
+            /* key                    = */ H5FD_CRYPT_TEST_KEY,
+            /* iv_size                = */ 16,
+            /* mode                   = */ 0,
+            /* fapl_id                = */ H5P_DEFAULT
+        };
+        hid_t crypt_fapl_id = H5I_INVALID_HID;
+
+
+        crypt_fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+        H5Pset_fapl_crypt(crypt_fapl_id, &crypt_vfd_config);
+        pb_vfd_config.fapl_id = crypt_fapl_id;
+
+        H5Pset_fapl_pb(fapl, &pb_vfd_config);
+    }
+
     if (params.file_per_proc) {
     }
     else {

@@ -1,32 +1,27 @@
-# from https://chromium.googlesource.com/external/github.com/nih-at/libzip/+/refs/tags/v1.7.1/FindNettle.cmake
-# - Find Nettle
-# Find the Nettle include directory and library
-#
-#  NETTLE_INCLUDE_DIR    - where to find <nettle/sha.h>, etc.
-#  NETTLE_LIBRARIES      - List of libraries when using libnettle.
-#  NETTLE_FOUND          - True if libnettle found.
-IF (NETTLE_INCLUDE_DIR)
-  # Already in cache, be silent
-  SET(NETTLE_FIND_QUIETLY TRUE)
-ENDIF (NETTLE_INCLUDE_DIR)
+set(_NETTLE_ROOT_HINTS
+    $ENV{NETTLE_ROOT_DIR}
+)
 
-FIND_PATH(NETTLE_INCLUDE_DIR nettle/md5.h nettle/ripemd160.h nettle/sha.h)
-
-FIND_LIBRARY(NETTLE_LIBRARY NAMES nettle libnettle)
-
-find_path(NETTLE_INCLUDE_DIR
+FIND_PATH(NETTLE_INCLUDE_DIR
     NAMES
-        nettle.h
+        nettle/md5.h
+        nettle/ripemd160.h
+        nettle/sha.h
+    HINTS
+        ${_NETTLE_ROOT_HINTS}
     PATH_SUFFIXES
         include
 )
 
-find_library(NETTLE_LIBRARY
+
+FIND_LIBRARY(NETTLE_LIBRARY
     NAMES
         nettle
         libnettle
     HINTS
-        "$ENV{PROGRAMFILES}/libnettle"
+        ${_NETTLE_ROOT_HINTS}
+    PATH_SUFFIXES
+        lib
 )
 
 # handle the QUIETLY and REQUIRED arguments and set NETTLE_FOUND to TRUE if 
@@ -37,3 +32,12 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(Nettle DEFAULT_MSG NETTLE_LIBRARY NETTLE_INCLU
 IF(NETTLE_FOUND)
   SET(NETTLE_LIBRARIES ${NETTLE_LIBRARY})
 ENDIF(NETTLE_FOUND)
+
+if (NETTLE_LIBRARIES AND NETTLE_INCLUDE_DIR)
+    add_library(Nettle::Nettle UNKNOWN IMPORTED)
+    set_target_properties(Nettle::Nettle PROPERTIES
+        IMPORTED_LOCATION "${NETTLE_LIBRARIES}"
+        INTERFACE_INCLUDE_DIRECTORIES "${NETTLE_INCLUDE_DIR}"
+    )
+endif()
+

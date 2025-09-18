@@ -9,8 +9,10 @@ project(encryption-wrapper)
 
 find_package(GCrypt REQUIRED)
 find_package(Nettle REQUIRED)
+find_package(GPGError REQUIRED)
 
 add_library(enc-lib "./EncryptionLibrary.cpp" "./ELgcrypt.cpp" "./ELnettle.cpp" "encryption_library.cpp")
 
-target_link_libraries(enc-lib gcrypt)
-target_link_libraries(enc-lib nettle)
+target_link_libraries(enc-lib PRIVATE GCrypt::GCrypt)
+target_link_libraries(enc-lib PRIVATE Nettle::Nettle)
+target_link_libraries(enc-lib PRIVATE GPGError::GPGError)

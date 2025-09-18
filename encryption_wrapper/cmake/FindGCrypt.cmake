@@ -18,23 +18,11 @@
 #=============================================================================
 #
 
-set(_GCRYPT_ROOT_HINTS
-    $ENV{GCRYTPT_ROOT_DIR}
-    ${GCRYPT_ROOT_DIR})
-
-set(_GCRYPT_ROOT_PATHS
-    "$ENV{PROGRAMFILES}/libgcrypt")
-
-set(_GCRYPT_ROOT_HINTS_AND_PATHS
-    HINTS ${_GCRYPT_ROOT_HINTS}
-    PATHS ${_GCRYPT_ROOT_PATHS})
-
-
 find_path(GCRYPT_INCLUDE_DIR
     NAMES
         gcrypt.h
-    HINTS
-        ${_GCRYPT_ROOT_HINTS_AND_PATHS}
+    PATHS
+        ENV GCRYPT_ROOT_DIR
     PATH_SUFFIXES
         include
 )
@@ -44,20 +32,12 @@ find_library(GCRYPT_LIBRARY
         gcrypt
         gcrypt11
         libgcrypt-11
-    HINTS
-        ${_GCRYPT_ROOT_HINTS_AND_PATHS}
+    PATHS
+        ENV GCRYPT_ROOT_DIR
     PATH_SUFFIXES
         lib
 )
-find_library(GCRYPT_ERROR_LIBRARY
-    NAMES
-        gpg-error
-        libgpg-error-0
-        libgpg-error6-0
-    HINTS
-        ${_GCRYPT_ROOT_HINTS_AND_PATHS}
-)
-set(GCRYPT_LIBRARIES ${GCRYPT_LIBRARY}  ${GCRYPT_ERROR_LIBRARY})
+set(GCRYPT_LIBRARIES ${GCRYPT_LIBRARY})
 
 if (GCRYPT_INCLUDE_DIR)
     file(STRINGS "${GCRYPT_INCLUDE_DIR}/gcrypt.h" _gcrypt_version_str REGEX "^#define GCRYPT_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]")
@@ -83,5 +63,10 @@ else (GCRYPT_VERSION)
         GCRYPT_LIBRARIES)
 endif (GCRYPT_VERSION)
 
-# show the GCRYPT_INCLUDE_DIRS and GCRYPT_LIBRARIES variables only in the advanced view
-mark_as_advanced(GCRYPT_INCLUDE_DIR GCRYPT_LIBRARIES)
+if (GCRYPT_LIBRARIES AND GCRYPT_INCLUDE_DIR)
+    add_library(GCrypt::GCrypt UNKNOWN IMPORTED)
+    set_target_properties(GCrypt::GCrypt PROPERTIES
+        IMPORTED_LOCATION "${GCRYPT_LIBRARIES}"
+        INTERFACE_INCLUDE_DIRECTORIES "${GCRYPT_INCLUDE_DIR}"
+    )
+endif()

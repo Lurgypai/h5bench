@@ -775,6 +775,12 @@ _set_params(char *key, char *val_in, bench_params *params_in_out, int do_write)
         else
             (*params_in_out).useCompress = 0;
     }
+    else if (strcmp(key, "ENCRYPT") == 0) {
+        if (val[0] == 'Y' || val[0] == 'y')
+            (*params_in_out).useEncryption = 1;
+        else
+            (*params_in_out).useEncryption = 0;
+    }
     else if (strcmp(key, "TIMESTEPS") == 0) {
         int ts_cnt = atoi(val);
         if (ts_cnt >= 1)
