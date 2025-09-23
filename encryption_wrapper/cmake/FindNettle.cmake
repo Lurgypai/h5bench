@@ -22,6 +22,7 @@ FIND_LIBRARY(NETTLE_LIBRARY
         ${_NETTLE_ROOT_HINTS}
     PATH_SUFFIXES
         lib
+        lib64
 )
 
 # handle the QUIETLY and REQUIRED arguments and set NETTLE_FOUND to TRUE if 
