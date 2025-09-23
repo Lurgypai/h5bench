@@ -9,7 +9,7 @@
 
 static std::unique_ptr<EncryptionLibrary> EncLib{};
 
-int load_library(enc_library lib) {
+int enc_load_library(enc_library lib) {
     switch(lib) {
         case gcrypt:
             EncLib = std::make_unique<ELgcrypt>();
@@ -24,6 +24,11 @@ int load_library(enc_library lib) {
 
 int enc_prepare(enc_algorithm alg) {
     EncLib->prepare(alg);
+    return 0;
+}
+
+int enc_set_key(char* key, size_t key_len) {
+    EncLib->setKey(key, key_len);
     return 0;
 }
 
@@ -42,7 +47,7 @@ int reset() {
     return 0;
 }
 
-char* makeKey(size_t length) {
+char* enc_make_key(size_t length) {
     static std::random_device d;
     static std::default_random_engine e{d()};
     static std::uniform_int_distribution<unsigned char> dist{0, 255};

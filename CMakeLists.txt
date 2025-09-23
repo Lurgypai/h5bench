@@ -134,7 +134,7 @@ target_link_libraries(h5bench_write_var_normal_dist h5bench_util hdf5 z m ${CMAK
 set(h5bench_write_src h5bench_patterns/h5bench_write.c)
 
 add_executable(h5bench_write ${h5bench_write_src})
-target_link_libraries(h5bench_write h5bench_util hdf5 z ${CMAKE_DL_LIBS} MPI::MPI_C) 
+target_link_libraries(h5bench_write h5bench_util hdf5 z ${CMAKE_DL_LIBS} MPI::MPI_C enc-lib) 
 
 # h5bench WRITE UNLIMITED #####################################################
 #

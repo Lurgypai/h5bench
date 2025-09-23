@@ -13,12 +13,13 @@ typedef enum enc_library {
     nettle,
 } enc_library;
 
-int load_library(enc_library lib);
+int enc_load_library(enc_library lib);
 int enc_prepare(enc_algorithm alg);
+int enc_set_key(char* key, size_t key_len);
 int enc_encrypt(void* source, size_t source_size, void* dest, size_t dest_size); 
 int enc_decrypt(void* source, size_t source_size, void* dest, size_t dest_size); 
 int reset();
-char* makeKey(size_t length);
+char* enc_make_key(size_t length);
 
 #ifdef __cplusplus
 }
