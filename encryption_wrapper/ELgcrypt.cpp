@@ -2,7 +2,6 @@
 
 #include <stdexcept>
 
-
 static void check_gcry(gcry_error_t err) {
     if(err != 0) {
         throw std::runtime_error{gcry_strerror(err)};
@@ -18,6 +17,7 @@ ELgcrypt::ELgcrypt() :
 }
 
 size_t ELgcrypt::prepare(Algorithm alg) {
+
     int cipher;
     int mode;
     size_t blkLen;

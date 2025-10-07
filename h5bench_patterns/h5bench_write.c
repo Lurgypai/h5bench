@@ -437,6 +437,22 @@ set_select_space_multi_3D_array(hid_t *filespace_out, hid_t *memspace_out, unsig
     return 0;
 }
 
+static void*
+alloc_encrypted(void* data, size_t data_size) {
+    if(!DO_ENCRYPT) return data;
+
+    void* buf_to_write = malloc(data_size);
+    enc_encrypt(data, data_size, buf_to_write, data_size);
+    return buf_to_write;
+}
+
+static void
+free_encrypted(void* data) {
+    if(!DO_ENCRYPT) return;
+
+    free(data);
+}
+
 /*
  *  write file: create m-D array as the dateset type, now linear-linear is 8 datasets of 1D array
  */
@@ -479,22 +495,44 @@ data_write_contig_contig_MD_array(time_step *ts, hid_t loc, hid_t *dset_ids, hid
 
     unsigned t2 = get_time_usec();
 
+    void *x, *y, *z, *px, *py, *pz, *id_1, *id_2;
+
+    // apply encryption (if enabled)
+    x = alloc_encrypted(data_in->x, sizeof(float) * NUM_PARTICLES);
+    y = alloc_encrypted(data_in->y, sizeof(float) * NUM_PARTICLES);
+    z = alloc_encrypted(data_in->z, sizeof(float) * NUM_PARTICLES);
+    px = alloc_encrypted(data_in->px, sizeof(float) * NUM_PARTICLES);
+    py = alloc_encrypted(data_in->py, sizeof(float) * NUM_PARTICLES);
+    pz = alloc_encrypted(data_in->pz, sizeof(float) * NUM_PARTICLES);
+    id_1 = alloc_encrypted(data_in->id_1, sizeof(int) * NUM_PARTICLES);
+    id_2 = alloc_encrypted(data_in->id_2, sizeof(float) * NUM_PARTICLES);
+
     ierr =
-        H5Dwrite_async(dset_ids[0], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->x, ts->es_data);
+        H5Dwrite_async(dset_ids[0], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, x, ts->es_data);
     ierr =
-        H5Dwrite_async(dset_ids[1], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->y, ts->es_data);
+        H5Dwrite_async(dset_ids[1], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, y, ts->es_data);
     ierr =
-        H5Dwrite_async(dset_ids[2], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->z, ts->es_data);
-    ierr = H5Dwrite_async(dset_ids[3], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->px,
+        H5Dwrite_async(dset_ids[2], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, z, ts->es_data);
+    ierr = H5Dwrite_async(dset_ids[3], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, px,
                           ts->es_data);
-    ierr = H5Dwrite_async(dset_ids[4], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->py,
+    ierr = H5Dwrite_async(dset_ids[4], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, py,
                           ts->es_data);
-    ierr = H5Dwrite_async(dset_ids[5], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->pz,
+    ierr = H5Dwrite_async(dset_ids[5], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, pz,
                           ts->es_data);
-    ierr = H5Dwrite_async(dset_ids[6], H5T_NATIVE_INT, memspace, filespace, plist_id, data_in->id_1,
+    ierr = H5Dwrite_async(dset_ids[6], H5T_NATIVE_INT, memspace, filespace, plist_id, id_1,
                           ts->es_data);
-    ierr = H5Dwrite_async(dset_ids[7], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, data_in->id_2,
+    ierr = H5Dwrite_async(dset_ids[7], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, id_2,
                           ts->es_data);
+
+    // cleanup (if encrypted)
+    free_encrypted(x);
+    free_encrypted(y);
+    free_encrypted(z);
+    free_encrypted(px);
+    free_encrypted(py);
+    free_encrypted(pz);
+    free_encrypted(id_1);
+    free_encrypted(id_2);
 
     unsigned t3 = get_time_usec();
 
@@ -617,21 +655,11 @@ data_write_interleaved_to_interleaved(time_step *ts, hid_t loc, hid_t *dset_ids,
     dset_ids[0] = H5Dcreate_async(loc, "particles", PARTICLE_COMPOUND_TYPE, filespace, H5P_DEFAULT, dcpl,
                                   H5P_DEFAULT, ts->es_meta_create);
 
-    particle* buf_to_write = NULL;
-    if(DO_ENCRYPT) {
-        size_t buf_size = sizeof(particle) * NUM_PARTICLES;
-        buf_to_write = malloc(buf_size);
-        enc_encrypt(data_in, buf_size, buf_to_write, buf_size);
-    }
-    else {
-        buf_to_write = data_in;
-    }
-
     unsigned t2 = get_time_usec();
-    ierr        = H5Dwrite_async(dset_ids[0], PARTICLE_COMPOUND_TYPE, memspace, filespace, plist_id, buf_to_write,
+    void* particle_buf = alloc_encrypted(data_in, sizeof(particle) * NUM_PARTICLES);
+    ierr        = H5Dwrite_async(dset_ids[0], PARTICLE_COMPOUND_TYPE, memspace, filespace, plist_id, particle_buf,
                           ts->es_data);
-
-    if(DO_ENCRYPT) free(buf_to_write);
+    free_encrypted(particle_buf);
 
     // should write all things in data_in
     unsigned t3    = get_time_usec();

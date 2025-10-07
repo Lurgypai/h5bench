@@ -332,7 +332,7 @@ hid_t
 es_id_set(async_mode mode)
 {
     hid_t es_id = 0;
-    if (has_vol_async) {
+    if (mode == MODE_ASYNC && has_vol_async) {
         es_id = H5EScreate();
     }
     else {
@@ -345,7 +345,7 @@ es_id_set(async_mode mode)
 void
 es_id_close(hid_t es_id, async_mode mode)
 {
-    if (has_vol_async) {
+    if (mode == MODE_ASYNC && has_vol_async) {
         H5ESclose(es_id);
     }
 }
