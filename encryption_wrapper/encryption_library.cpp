@@ -32,6 +32,10 @@ int enc_set_key(char* key, size_t key_len) {
     return 0;
 }
 
+int enc_set_nonce(char* nonce, size_t nonce_len) {
+    EncLib->setNonce(nonce, nonce_len);
+}
+
 int enc_encrypt(void* source, size_t source_size, void* dest, size_t dest_size) {
     EncLib->encrypt(source, source_size, dest, dest_size);
     return 0;
@@ -47,7 +51,15 @@ int reset() {
     return 0;
 }
 
-char* enc_make_key(size_t length) {
+size_t enc_get_key_size() {
+    return EncLib->getKeySize();
+}
+
+size_t enc_get_nonce_size() {
+    return EncLib->getNonceSize();
+}
+
+static char* make_random_data(size_t length) {
     static std::random_device d;
     static std::default_random_engine e{d()};
     static std::uniform_int_distribution<unsigned char> dist{0, 255};
@@ -56,4 +68,12 @@ char* enc_make_key(size_t length) {
         key[i] = dist(e);
     }
     return key;
+}
+
+char* enc_make_key() {
+    return make_random_data(EncLib->getKeySize());
+}
+
+char* enc_make_nonce() {
+    return make_random_data(EncLib->getNonceSize());
 }

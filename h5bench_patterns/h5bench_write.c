@@ -459,7 +459,7 @@ free_encrypted(void* data) {
 void
 data_write_contig_contig_MD_array(time_step *ts, hid_t loc, hid_t *dset_ids, hid_t filespace, hid_t memspace,
                                   hid_t plist_id, data_contig_md *data_in, unsigned long *metadata_time,
-                                  unsigned long *data_time)
+                                  unsigned long *data_time, unsigned long *encryption_time)
 {
     assert(data_in && data_in->x);
     hid_t dcpl;
@@ -507,6 +507,8 @@ data_write_contig_contig_MD_array(time_step *ts, hid_t loc, hid_t *dset_ids, hid
     id_1 = alloc_encrypted(data_in->id_1, sizeof(int) * NUM_PARTICLES);
     id_2 = alloc_encrypted(data_in->id_2, sizeof(float) * NUM_PARTICLES);
 
+    unsigned t3 = get_time_usec();
+
     ierr =
         H5Dwrite_async(dset_ids[0], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, x, ts->es_data);
     ierr =
@@ -524,6 +526,8 @@ data_write_contig_contig_MD_array(time_step *ts, hid_t loc, hid_t *dset_ids, hid
     ierr = H5Dwrite_async(dset_ids[7], H5T_NATIVE_FLOAT, memspace, filespace, plist_id, id_2,
                           ts->es_data);
 
+    unsigned t4 = get_time_usec();
+
     // cleanup (if encrypted)
     free_encrypted(x);
     free_encrypted(y);
@@ -534,10 +538,9 @@ data_write_contig_contig_MD_array(time_step *ts, hid_t loc, hid_t *dset_ids, hid
     free_encrypted(id_1);
     free_encrypted(id_2);
 
-    unsigned t3 = get_time_usec();
-
     *metadata_time = t2 - t1;
-    *data_time     = t3 - t2;
+    *encryption_time = t3 - t2;
+    *data_time     = t4 - t3;
 
     if (MY_RANK == 0)
         printf("    %s: Finished writing time step \n", __func__);
@@ -762,7 +765,8 @@ _prepare_data(bench_params params, hid_t *filespace_out, hid_t *memspace_out,
 int
 _run_benchmark_write(bench_params params, hid_t file_id, hid_t fapl, hid_t filespace, hid_t memspace,
                      void *data, unsigned long data_size, unsigned long *total_data_size_out,
-                     unsigned long *data_time_total, unsigned long *metadata_time_total)
+                     unsigned long *data_time_total, unsigned long *metadata_time_total,
+                     unsigned long *encryption_time_total)
 {
     unsigned long long data_preparation_time;
 
@@ -800,6 +804,7 @@ _run_benchmark_write(bench_params params, hid_t file_id, hid_t fapl, hid_t files
     unsigned long metadata_time_exp = 0, data_time_exp = 0, t0, t1, t2, t3, t4;
     unsigned long metadata_time_imp = 0, data_time_imp = 0;
     unsigned long meta_time1 = 0, meta_time2 = 0, meta_time3 = 0, meta_time4 = 0, meta_time5 = 0;
+    unsigned long encryption_time_exp;
     for (int ts_index = 0; ts_index < timestep_cnt; ts_index++) {
         meta_time1 = 0, meta_time2 = 0, meta_time3 = 0, meta_time4 = 0, meta_time5 = 0;
         time_step *ts = &(MEM_MONITOR->time_steps[ts_index]);
@@ -831,7 +836,7 @@ _run_benchmark_write(bench_params params, hid_t file_id, hid_t fapl, hid_t files
             case CONTIG_CONTIG_3D:
             case CONTIG_CONTIG_STRIDED_1D:
                 data_write_contig_contig_MD_array(ts, ts->grp_id, ts->dset_ids, filespace, memspace, plist_id,
-                                                  (data_contig_md *)data, &meta_time4, &data_time_exp);
+                                                  (data_contig_md *)data, &meta_time4, &data_time_exp, &encryption_time_exp);
                 dset_cnt = 8;
                 break;
 
@@ -888,6 +893,7 @@ _run_benchmark_write(bench_params params, hid_t file_id, hid_t fapl, hid_t files
 
         *metadata_time_total += (meta_time1 + meta_time2 + meta_time3 + meta_time4);
         *data_time_total += (data_time_exp + data_time_imp);
+        *encryption_time_total += (encryption_time_exp);
     } // end for timestep_cnt
 
     // all done, check if any timesteps undone
@@ -1118,9 +1124,14 @@ main(int argc, char *argv[])
         // load library and set alg
         enc_load_library(gcrypt);
         enc_prepare(aes256);
-
-        char* key = enc_make_key(16);
-        enc_set_key(key, 16);
+        
+        // make and set key/nonce
+        size_t key_size = enc_get_key_size();
+        char* key = enc_make_key();
+        enc_set_key(key, key_size);
+        size_t nonce_size = enc_get_nonce_size();
+        char* nonce = enc_make_nonce();
+        enc_set_nocne(nonce, nonce_size);
     }
 
     if (params.file_per_proc) {
@@ -1160,9 +1171,9 @@ main(int argc, char *argv[])
     MPI_Barrier(MPI_COMM_WORLD);
     unsigned long t2 = get_time_usec(); // t2 - t1: metadata: creating/opening
 
-    unsigned long raw_write_time, inner_metadata_time, local_data_size;
+    unsigned long raw_write_time, inner_metadata_time, local_data_size, encryption_time;
     int           stat = _run_benchmark_write(params, file_id, fapl, filespace, memspace, data, data_size,
-                                    &local_data_size, &raw_write_time, &inner_metadata_time);
+                                    &local_data_size, &raw_write_time, &inner_metadata_time, &encryption_time);
 
     if (stat < 0) {
         if (MY_RANK == 0)
@@ -1211,6 +1222,9 @@ main(int argc, char *argv[])
         float rwt_s    = (float)raw_write_time / (1000.0 * 1000.0);
         float raw_rate = (float)total_size_bytes / rwt_s;
         printf("Raw write time: %.3f s\n", rwt_s);
+        
+        float enc_s   = (float)encryption_time / (1000.0 * 1000.0);
+        printf("Encryption time: %.3f s\n", enc_s);
 
         float meta_time_s = (float)inner_metadata_time / (1000.0 * 1000.0);
         printf("Metadata time: %.3f s\n", meta_time_s);
@@ -1248,6 +1262,7 @@ main(int argc, char *argv[])
             value = format_human_readable(total_size_bytes);
             fprintf(params.csv_fs, "total size, %.3lf, %cB\n", value.value, value.unit);
             fprintf(params.csv_fs, "raw time, %.3f, %s\n", rwt_s, "seconds");
+            fprintf(params.csv_fs, "encryption time, %.3lf, %s\n", enc_s, "seconds");
             value = format_human_readable(raw_rate);
             fprintf(params.csv_fs, "raw rate, %.3lf, %cB/s\n", value.value, value.unit);
             fprintf(params.csv_fs, "metadata time, %.3f, %s\n", meta_time_s, "seconds");
