@@ -1,0 +1,16 @@
+dataset
+count=10
+library=gcrypt
+algorithm=aes256
+dataset
+count=20
+library=gcrypt
+algorithm=chacha20
+dataset
+count=30
+library=nettle
+algorithm=chacha20
+dataset
+count=40
+library=nettle
+algorithm=chacha20

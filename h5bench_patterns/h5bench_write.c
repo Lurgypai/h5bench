@@ -1131,7 +1131,7 @@ main(int argc, char *argv[])
         enc_set_key(key, key_size);
         size_t nonce_size = enc_get_nonce_size();
         char* nonce = enc_make_nonce();
-        enc_set_nocne(nonce, nonce_size);
+        enc_set_nonce(nonce, nonce_size);
     }
 
     if (params.file_per_proc) {

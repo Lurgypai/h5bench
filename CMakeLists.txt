@@ -29,6 +29,7 @@ option(H5BENCH_AMREX            "Enable AMReX benchmark"            OFF)
 option(H5BENCH_OPENPMD          "Enable OpenPMD benchmark"          OFF)
 option(H5BENCH_E3SM             "Enable E3SM benchmark"             OFF)
 option(H5BENCH_MACSIO           "Enable MACSio benchmark"           OFF)
+option(H5BENCH_ENCRYPTION       "Enable encryption benchmark"       OFF)
 
 message(STATUS "h5bench baseline: ON")
 
@@ -167,6 +168,16 @@ set(h5bench_read_src h5bench_patterns/h5bench_read.c)
 
 add_executable(h5bench_read ${h5bench_read_src})
 target_link_libraries(h5bench_read h5bench_util hdf5 z ${CMAKE_DL_LIBS} MPI::MPI_C)
+
+
+# Encryption Benchmarks #######################################################
+#
+
+if(H5BENCH_ENCRYPTION)
+    set(h5bench_encrypted_write_src encryption_patterns/h5bench_write_encrypted.cpp)
+    add_executable(h5bench_encrypted_write ${h5bench_encrypted_write_src})
+    target_link_libraries(h5bench_encrypted_write hdf5 MPI::MPI_C enc-lib)
+endif()
 
 
 # Exerciser ###################################################################
