@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <chrono>
 
 #include <cstring>
 
@@ -11,6 +12,20 @@
 
 #include "../encryption_wrapper/EncryptionLibrary.h"
 #include "../encryption_wrapper/ELgcrypt.h"
+
+class Timer {
+public:
+    void reset() {
+        start = std::chrono::high_resolution_clock::now();
+    }
+    double getElapsed() {
+        auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now() - start);
+        return elapsed.count();
+    }
+private:
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+};
 
 // size of elements in the opaque type, the count in the configuration is in terms of these blocks
 constexpr std::size_t SHARED_BLOCK_SIZE = 16;
@@ -137,11 +152,22 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     /* =========================== PERFORM IO ========================== */
+    
+    Timer totalIOTimer;
+    totalIOTimer.reset();
+    Timer encryptionTimer;
+    double encryptionTime = 0.0;
+    Timer writeTimer;
+    double writeTime = 0.0;
+    
+
     for(int i = 0; i != datasetTemplates.size(); ++i) {
         const auto& datasetTemplate = datasetTemplates[i];
         const auto& dsetId = datasetIds[i];
 
 
+        /* --------------- ENCRYPTION --------------- */
+        encryptionTimer.reset();
         // generate encryption context
         std::unique_ptr<EncryptionLibrary> el;
         if(datasetTemplate.library == "gcrypt") {
@@ -174,17 +200,44 @@ int main(int argc, char** argv) {
 
         // apply encryption
         el->encrypt(plaintextBuffer.data(), plaintextBuffer.size(), ciphertextBuffer.data(), ciphertextBuffer.size());
+        encryptionTime += encryptionTimer.getElapsed();
 
+
+        /* --------------- IO --------------- */
+        writeTimer.reset();
         // do write
         hsize_t spaceSize[1] = {datasetTemplate.count};
         hid_t fSpace = H5Screate_simple(1, spaceSize, NULL);
         hsize_t offset[1] = {ioCount * myRank};
-        H5Sselect_hyperslab(fSpace, H5S_SELECT_SET, offset, NULL, &ioCount, NULL);
+        hsize_t blkCount[1] = {1};
+        H5Sselect_hyperslab(fSpace, H5S_SELECT_SET, offset, NULL, blkCount, &ioCount);
         hid_t dxpl = H5Pcreate(H5P_DATASET_XFER);
         H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE);
         H5Dwrite(dsetId, aesOpaque, H5S_ALL, fSpace, dxpl, ciphertextBuffer.data());
+        writeTime += writeTimer.getElapsed();
     }
     /* =========================== END PERFORM IO ========================== */
+
+    double ioTime = totalIOTimer.getElapsed();
+
+    // logging performed only by rank 0
+    if(myRank != 0) return 0;
+
+    std::cout << "Total time: " << ioTime << '\n';
+    std::cout << "Write time: " << writeTime << '\n';
+    std::cout << "Encryption time: " << encryptionTime << '\n';
+    
+    std::ofstream outFile{"out.csv"};
+
+    if(!outFile.good()) {
+        std::cerr << "Error, unable to open output file \"out.csv\" for writing.\n";
+        return 1;
+    }
+
+    outFile << "name, value\n";
+    outFile << "total, " << ioTime << '\n';
+    outFile << "write, " << writeTime << '\n';
+    outFile << "encryption, " << encryptionTime << '\n';
 
     return 0;
 }
