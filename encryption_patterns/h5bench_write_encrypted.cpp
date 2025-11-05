@@ -38,8 +38,8 @@ struct Dataset {
 
 static inline bool isValidDataset(const Dataset& dataset) {
     return dataset.count > 0 &&
-        (dataset.algorithm == "aes256" || dataset.algorithm == "chacha20") &&
-        (dataset.library == "nettle" || dataset.library == "gcrypt");
+        (dataset.algorithm == "aes256" || dataset.algorithm == "chacha20" || dataset.algorithm == "none") &&
+        (dataset.library == "nettle" || dataset.library == "gcrypt" || dataset.library == "none");
 }
 
 int main(int argc, char** argv) {
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
         if(line == "dataset") {
             // check if current dataset is valid (specified all values)
             if(curDataset != nullptr && !isValidDataset(*curDataset)) {
-                // error out because we didn't read a full datset
+                // error out because we didn't read a full dataset
                 std::cerr << "ERROR: Invalid dataset description in config file\n";
                 return 1;
             }
@@ -165,41 +165,43 @@ int main(int argc, char** argv) {
         const auto& datasetTemplate = datasetTemplates[i];
         const auto& dsetId = datasetIds[i];
 
+        const std::size_t ioCount = datasetTemplate.count / processCount;
+        const std::size_t ioSize = ioCount * SHARED_BLOCK_SIZE;
+
+        std::vector<char> ciphertextBuffer;
+        ciphertextBuffer.resize(ioSize);
 
         /* --------------- ENCRYPTION --------------- */
         encryptionTimer.reset();
-        // generate encryption context
-        std::unique_ptr<EncryptionLibrary> el;
-        if(datasetTemplate.library == "gcrypt") {
-            el = std::make_unique<ELgcrypt>();
-        }
-        else if(datasetTemplate.library == "nettle") {
-            el = std::make_unique<ELgcrypt>();
-        }
+        if(datasetTemplate.library != "none") {
+            // generate encryption context
+            std::unique_ptr<EncryptionLibrary> el;
+            if(datasetTemplate.library == "gcrypt") {
+                el = std::make_unique<ELgcrypt>();
+            }
+            else if(datasetTemplate.library == "nettle") {
+                el = std::make_unique<ELgcrypt>();
+            }
 
-        if(datasetTemplate.algorithm == "aes256") {
-            el->prepare(Algorithm::aes256);
-        }
-        else if(datasetTemplate.algorithm == "chacha20") {
-            el->prepare(Algorithm::aes256);
-        }
+            if(datasetTemplate.algorithm == "aes256") {
+                el->prepare(Algorithm::aes256);
+            }
+            else if(datasetTemplate.algorithm == "chacha20") {
+                el->prepare(Algorithm::chacha20);
+            }
 
-        std::string key = el->makeKey();
-        el->setKey(key.data(), key.size());
-        std::string nonce = el->makeNonce();
-        el->setNonce(nonce.data(), nonce.size());
+            std::string key = el->makeKey();
+            el->setKey(key.data(), key.size());
+            std::string nonce = el->makeNonce();
+            el->setNonce(nonce.data(), nonce.size());
 
-        const std::size_t ioCount = datasetTemplate.count / processCount;
-        const std::size_t ioSize = ioCount * SHARED_BLOCK_SIZE;
-        // allocate a buffers
-        std::vector<char> plaintextBuffer;
-        plaintextBuffer.resize(nonce.size() + ioSize);
-        std::vector<char> ciphertextBuffer;
-        ciphertextBuffer.resize(nonce.size() + ioSize);
-        std::memcpy(ciphertextBuffer.data(), nonce.data(), nonce.size());
+            // allocate a buffers
+            std::vector<char> plaintextBuffer;
+            plaintextBuffer.resize(ioSize);
 
-        // apply encryption
-        el->encrypt(plaintextBuffer.data(), plaintextBuffer.size(), ciphertextBuffer.data(), ciphertextBuffer.size());
+            // apply encryption
+            el->encrypt(plaintextBuffer.data(), plaintextBuffer.size(), ciphertextBuffer.data(), ciphertextBuffer.size());
+        } 
         encryptionTime += encryptionTimer.getElapsed();
 
 
@@ -208,13 +210,20 @@ int main(int argc, char** argv) {
         // do write
         hsize_t spaceSize[1] = {datasetTemplate.count};
         hid_t fSpace = H5Screate_simple(1, spaceSize, NULL);
+        hsize_t memSpaceSize[1] = {ioCount};
+        hid_t mSpace = H5Screate_simple(1, memSpaceSize, NULL);
+
         hsize_t offset[1] = {ioCount * myRank};
         hsize_t blkCount[1] = {1};
         H5Sselect_hyperslab(fSpace, H5S_SELECT_SET, offset, NULL, blkCount, &ioCount);
         hid_t dxpl = H5Pcreate(H5P_DATASET_XFER);
         H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE);
-        H5Dwrite(dsetId, aesOpaque, H5S_ALL, fSpace, dxpl, ciphertextBuffer.data());
+        H5Dwrite(dsetId, aesOpaque, mSpace, fSpace, dxpl, ciphertextBuffer.data());
         writeTime += writeTimer.getElapsed();
+
+        H5Pclose(dxpl);
+        H5Sclose(fSpace);
+        H5Sclose(mSpace);
     }
     /* =========================== END PERFORM IO ========================== */
 
@@ -223,11 +232,16 @@ int main(int argc, char** argv) {
     // logging performed only by rank 0
     if(myRank != 0) return 0;
 
-    std::cout << "Total time: " << ioTime << '\n';
-    std::cout << "Write time: " << writeTime << '\n';
-    std::cout << "Encryption time: " << encryptionTime << '\n';
+    double ioTimeS = ioTime / (1000.0 * 1000.0 * 1000.0);
+    double writeTimeS = writeTime / (1000.0 * 1000.0 * 1000.0);
+    double encryptionTimeS = encryptionTime / (1000.0 * 1000.0 * 1000.0);
+
+    std::cout << "Total time: " << ioTimeS << '\n';
+    std::cout << "Write time: " << writeTimeS << '\n';
+    std::cout << "Encryption time: " << encryptionTimeS << '\n';
     
-    std::ofstream outFile{"out.csv"};
+    std::string outName = configFileName + std::string{"-out.csv"};
+    std::ofstream outFile{outName};
 
     if(!outFile.good()) {
         std::cerr << "Error, unable to open output file \"out.csv\" for writing.\n";
@@ -235,9 +249,9 @@ int main(int argc, char** argv) {
     }
 
     outFile << "name, value\n";
-    outFile << "total, " << ioTime << '\n';
-    outFile << "write, " << writeTime << '\n';
-    outFile << "encryption, " << encryptionTime << '\n';
+    outFile << "total, " << ioTimeS << '\n';
+    outFile << "write, " << writeTimeS << '\n';
+    outFile << "encryption, " << encryptionTimeS << '\n';
 
     return 0;
 }
