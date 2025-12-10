@@ -13,6 +13,8 @@
 #include "../encryption_wrapper/EncryptionLibrary.h"
 #include "../encryption_wrapper/ELgcrypt.h"
 
+#include "H5Zencryption.h"
+
 class Timer {
 public:
     void reset() {
@@ -150,6 +152,13 @@ int main(int argc, char** argv) {
         datasetName += std::to_string(i);
         hsize_t spaceSize[1] = {datasetTemplate.count};
         hid_t fSpace = H5Screate_simple(1, spaceSize, NULL);
+
+        //enable filter
+        hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
+        hsize_t chunkSize[1] = {4096};
+        H5Pset_chunk(dcpl, 1, chunkSize);
+        H5Pset_filter(dcpl_id
+
         dsetId = H5Dcreate2(fileId, datasetName.c_str(), aesOpaque, fSpace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     }
     /* =========================== END PREP DATASETS ========================== */
